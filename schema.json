@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bonsai/gh-chatgpt-ext/schema.json",
+  "title": "gh-chatgpt-ext Shared Context",
+  "type": "object",
+  "required": ["version", "id", "status", "createdAt", "issue"],
+  "properties": {
+    "version": { "const": 1 },
+    "id": { "type": "string", "format": "uuid" },
+    "status": { "enum": ["idle", "drafted", "answer_ready", "error"] },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "issue": {
+      "type": "object",
+      "required": ["owner", "repo", "number", "title", "url", "body"],
+      "properties": {
+        "owner": { "type": "string", "minLength": 1 },
+        "repo": { "type": "string", "minLength": 1 },
+        "number": { "type": "integer", "minimum": 1 },
+        "title": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "body": { "type": "string", "maxLength": 12000 },
+        "selection": { "type": "string", "maxLength": 4000 },
+        "truncated": { "type": "boolean", "default": false }
+      },
+      "additionalProperties": false
+    },
+    "prompt": { "type": "string" },
+    "answer": {
+      "type": "object",
+      "required": ["text", "capturedAt"],
+      "properties": {
+        "text": { "type": "string" },
+        "capturedAt": { "type": "string", "format": "date-time" },
+        "conversationUrl": { "type": "string", "format": "uri" }
+      },
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "enum": ["NOT_ISSUE", "CHATGPT_TAB_MISSING", "ADAPTER_UNSUPPORTED", "NOT_LOGGED_IN", "COMMENT_BOX_MISSING"] },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,10 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "bonsai GitHub Live",
+  "name": "gh-chatgpt-ext",
   "version": "0.1.0",
-  "description": "Live GitHub repository and issue view inside chatgpt.com.",
-  "permissions": ["storage"],
-  "host_permissions": ["https://api.github.com/*"],
+  "description": "GitHub workspace dashboard for Edge.",
+  "permissions": ["storage", "tabs", "sidePanel"],
+  "host_permissions": ["https://api.github.com/*", "https://github.com/*"],
+  "background": { "service_worker": "service-worker.js" },
+  "side_panel": { "default_path": "sidepanel.html" },
   "content_scripts": [
     {
       "matches": ["https://chatgpt.com/*"],
@@ -13,5 +15,5 @@
       "run_at": "document_idle"
     }
   ],
-  "action": { "default_title": "GitHub Live" }
+  "action": { "default_title": "Open GH Workspace" }
 }

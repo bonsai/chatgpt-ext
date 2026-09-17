@@ -35,7 +35,7 @@
   const status = root.querySelector('#gh-live-status');
   const sessionLabel = root.querySelector('#gh-live-session');
 
-  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const esc = s => String(s ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
   const headers = async () => {
     const { githubToken } = await chrome.storage.local.get('githubToken');
     return githubToken ? { Authorization: `Bearer ${githubToken}`, Accept: 'application/vnd.github+json' } : { Accept: 'application/vnd.github+json' };
@@ -98,7 +98,7 @@
   }
   async function loadJournal() {
     const entries = (await journalEntries()).filter(x => x.session_id === sessionId()).slice(0, 30);
-    list.innerHTML = `<form id="gh-journal-form" class="gh-journal-form"><input id="gh-journal-repo" placeholder="repo (例: bonsai/chatgpt.com-ext)" autocomplete="off"><textarea id="gh-journal-note" rows="3" placeholder="このセッションのメモ…"></textarea><button type="submit">＋ JOURNAL</button></form><div class="gh-session">session: ${esc(sessionId())}</div>${entries.map(x => `<article class="gh-journal-entry"><b>${esc(x.repo || '—')}</b><span>${esc(new Date(x.timestamp).toLocaleString())}</span><p>${esc(x.body)}</p></article>`).join('') || '<div class="gh-empty">Journalはまだありません</div>'}`;
+    list.innerHTML = `<form id="gh-journal-form" class="gh-journal-form"><input id="gh-journal-repo" placeholder="repo (例: bonsai/chatgpt.com-ext)" autocomplete="off"><textarea id="gh-journal-note" rows="3" placeholder="このセッションのメモ…"></textarea><button type="submit">＋ JOURNAL</button></form><div class="gh-session">session: ${esc(sessionId())}</div>${entries.map(x => `<article class="gh-journal-entry"><b>${esc(x.repo || '—')}</b><span>${esc(new Date(x.timestamp).toLocaleString())}</span><p>${esc(x.body)}</p></article>`).join('') || '<div class="gh-empty">Journalはまだありません</div>`;
     list.querySelector('#gh-journal-form').onsubmit = async e => {
       e.preventDefault();
       const repo = list.querySelector('#gh-journal-repo').value.trim();
@@ -129,4 +129,42 @@
   root.querySelector('#gh-live-toggle').onclick = () => { panel.hidden = !panel.hidden; root.classList.toggle('open', !panel.hidden); if (!panel.hidden) load(); };
   root.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; load(); });
   timer = setInterval(() => { if (!panel.hidden) load(); }, POLL_MS);
+})();
+
+// Explicit, user-triggered GitHub → ChatGPT draft handoff.
+(() => {
+  if (!location.hostname.endsWith('chatgpt.com')) return;
+  let applied = false;
+
+  const findComposer = () => document.querySelector('textarea, [contenteditable="true"]');
+  const setComposer = (element, text) => {
+    element.focus();
+    if (element.tagName === 'TEXTAREA') {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(element, text);
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    }
+    element.textContent = text;
+    element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+    return true;
+  };
+
+  async function applyDraft() {
+    if (applied) return;
+    const data = await chrome.storage.session.get('chatgptDraft');
+    const draft = data?.chatgptDraft?.prompt;
+    if (!draft) return;
+    const composer = findComposer();
+    if (!composer) return;
+    if (setComposer(composer, draft)) {
+      applied = true;
+      await chrome.storage.session.remove('chatgptDraft');
+    }
+  }
+
+  applyDraft();
+  const observer = new MutationObserver(() => applyDraft());
+  observer.observe(document.documentElement, { childList: true, subtree: true });
 })();

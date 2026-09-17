@@ -15,9 +15,7 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.action.onClicked.addListener(async (tab) => {
-  if (tab?.windowId !== undefined) {
-    await chrome.sidePanel.open({ windowId: tab.windowId });
-  }
+  if (tab?.windowId !== undefined) await chrome.sidePanel.open({ windowId: tab.windowId });
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

@@ -7,7 +7,7 @@
   document.querySelector('#app')?.before(root);
 
   const style = document.createElement('style');
-  style.textContent = '#gh-now{margin:10px 10px 0}#gh-now h3{margin-top:0}.now-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.now-item{padding:7px;border:1px solid #ddd;border-radius:7px}.now-item a{display:block}.now-actions{margin-top:8px}.now-actions button{margin:3px 3px 0 0}.now-error{font-size:12px}.now-ok{color:#176b3a}.now-fail{color:#b42318}';
+  style.textContent = '#gh-now{margin:10px 10px 0}#gh-now h3{margin-top:0}.now-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.now-item{padding:7px;border:1px solid #ddd;border-radius:7px}.now-item a{display:block}.now-actions{margin-top:8px}.now-actions button{margin:3px 3px 0 0}.now-error{font-size:12px}.now-ok{color:#176b3a}.now-fail{color:#b42318}.now-debug{margin-top:6px;padding:6px;border-top:1px solid #eee}.now-debug pre{white-space:pre-wrap;font-size:11px;max-height:120px;overflow:auto}.now-debug button{margin-right:4px}';
   document.head.appendChild(style);
 
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -69,30 +69,46 @@
           <div class="now-item"><b>CI / Actions</b><span class="${failed.length ? 'now-fail' : 'now-ok'}">${failed.length} failed · ${active.length} active</span></div>
         </div>
         <div class="now-actions">
-          ${failed.map(r => `<div class="now-item"><b>❌ ${esc(r.name)}</b><span class="muted">${esc(r.head_branch || '')} · ${esc(r.head_sha?.slice(0, 7) || '')}</span><button data-debug="${esc(r.id)}">ChatGPTでデバッグ</button><button data-url="${esc(r.html_url)}">Runを開く</button></div>`).join('')}
+          ${failed.map(r => `<div class="now-item"><b>❌ ${esc(r.name)}</b><span class="muted">${esc(r.head_branch || '')} · ${esc(r.head_sha?.slice(0, 7) || '')}</span><button data-debug="${esc(r.id)}">ChatGPTでデバッグ</button><button data-url="${esc(r.html_url)}">Runを開く</button><div id="debug-${esc(r.id)}"></div></div>`).join('')}
           ${active.map(r => `<div class="now-item"><b>⏳ ${esc(r.name)}</b><span class="muted">${esc(r.head_branch || '')}</span><button data-url="${esc(r.html_url)}">Runを開く</button></div>`).join('')}
           ${!failed.length && !active.length ? '<span class="muted">対象repoの失敗・実行中Actionsはありません。</span>' : ''}
         </div>`;
 
       root.querySelectorAll('[data-url]').forEach((el) => el.addEventListener('click', (e) => { e.preventDefault(); open(el.dataset.url); }));
-      root.querySelectorAll('[data-debug]').forEach((el) => el.addEventListener('click', async () => debugRun(repo, runs.find(r => String(r.id) === el.dataset.debug))));
+      root.querySelectorAll('[data-debug]').forEach((el) => el.addEventListener('click', async () => debugRun(repo, runs.find(r => String(r.id) === el.dataset.debug), el)));
     } catch (error) {
       root.innerHTML = `<h3>GH NOW</h3><p class="now-error">${esc(error.message)}<br><span class="muted">GitHub tokenまたはAPI権限を確認してください。</span></p>`;
     }
   }
 
-  async function debugRun(repo, run) {
+  async function debugRun(repo, run, button) {
     if (!repo || !run) return;
+    const host = root.querySelector(`#debug-${CSS.escape(String(run.id))}`);
+    if (!host) return;
+    button.disabled = true;
+    button.textContent = '調査中…';
     let step = 'failed step unavailable';
+    let excerpt = '';
     try {
       const jobs = await api(`/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.repo)}/actions/runs/${run.id}/jobs?per_page=100`);
       const failedJob = (jobs.jobs || []).find((job) => job.conclusion === 'failure');
       const failedStep = failedJob?.steps?.find((s) => s.conclusion === 'failure');
       step = failedJob ? `${failedJob.name}${failedStep ? ` / ${failedStep.name}` : ''}` : step;
     } catch (_) {}
-    const prompt = `GitHub Actions の失敗をデバッグしてください。\n\nRepository: ${repo.owner}/${repo.repo}\nBranch: ${run.head_branch || ''}\nCommit: ${run.head_sha || ''}\nWorkflow: ${run.name || ''}\nRun: ${run.html_url || ''}\nFailed job / step: ${step}\n\n制約:\n- 推測ではなく、上記の情報から確認すべき原因候補と切り分け手順を整理してください。\n- GitHubへの書き込みや再実行は提案だけにしてください。\n- secrets、環境変数、ログ全文は要求しないでください。`;
-    const result = await chrome.runtime.sendMessage({ type: 'open-chatgpt-draft', prompt });
-    if (!result?.ok) alert(result?.error || 'ChatGPT draftを開けませんでした');
+
+    const prompt = `GitHub Actions の失敗をデバッグしてください。\n\nRepository: ${repo.owner}/${repo.repo}\nBranch: ${run.head_branch || ''}\nCommit: ${run.head_sha || ''}\nWorkflow: ${run.name || ''}\nRun: ${run.html_url || ''}\nFailed job / step: ${step}\nError excerpt: ${excerpt}\n\n制約:\n- 推測ではなく、上記の情報から確認すべき原因候補と切り分け手順を整理してください。\n- GitHubへの書き込みや再実行は提案だけにしてください。\n- secrets、環境変数、ログ全文は要求しないでください。`;
+
+    host.innerHTML = `<div class="now-debug"><b>ChatGPT draft</b><pre>${esc(prompt)}</pre><button data-copy>Promptをコピー</button><button data-send>ChatGPTへ渡す</button></div>`;
+    host.querySelector('[data-copy]').onclick = async () => {
+      await navigator.clipboard.writeText(prompt);
+      host.querySelector('[data-copy]').textContent = 'コピー済み';
+    };
+    host.querySelector('[data-send]').onclick = async () => {
+      const result = await chrome.runtime.sendMessage({ type: 'open-chatgpt-draft', prompt });
+      if (!result?.ok) alert(result?.error || 'ChatGPT draftを開けませんでした');
+    };
+    button.disabled = false;
+    button.textContent = '再生成';
   }
 
   load();

@@ -1,5 +1,7 @@
 # gh-chatgpt-ext
 
+Version 0.2.0 — Edge Side Panel / GitHub REST API skeleton
+
 Edge Side PanelからGitHub REST APIを読む、GH WORKSPACEのスケルトンです。
 
 ## Load locally
